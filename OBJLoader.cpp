@@ -45,13 +45,14 @@ vector<FACE> f;
 int cameraParameterX = 1, cameraParameterY = 1, cameraParameterZ = 1;
 float scale = 1.0;
 
-const float scaleStep = 0.05, scaleMin = 0.1, scaleMax = 10.0;
-const int cameraStep = 5, cameraMin = -360, cameraMax = 360;
+const float scaleStep = 0.1, scaleMin = 0.1, scaleMax = 10.0;
+const int cameraStep = 30, cameraMin = -360, cameraMax = 360;
 
 Mat referenceImage, texture;
 
 void SetPerspective(int x, int y, int z, float scale);
 bool RandomTransformation(Mat& texture, Mat& ref, ll& mDif, int& mX, int& mY, int& mZ, float& mScale);
+void CheckAllTransformation(Mat& texture, Mat& ref, ll& mDif, int& mX, int& mY, int& mZ, float& mScale);
 void Str2Face(char msg[], FACE& face, int idx);
 void LoadObj(string fileName);
 void InitLight();
@@ -102,6 +103,38 @@ bool RandomTransformation(Mat& texture, Mat& ref, ll& mDif, int& mX, int& mY, in
 		return 1;
 	}
 	return 0;
+}
+void CheckAllTransformation(Mat& texture, Mat& ref, ll& mDif, int& mX, int& mY, int& mZ, float& mScale) {
+	ll diff = 0;
+
+	for (int xx = -200; xx <= 200; xx += cameraStep) {
+		for (int yy = -200; yy <= 200; yy += cameraStep) {
+			for (int zz = -200; zz <= 200; zz += cameraStep) {
+				for (int sca = 10; sca <= 400; sca += scaleStep *100) {
+					float sc = sca / 100.0;
+					SetPerspective(xx, yy, zz, sc);
+					Texture2Mat(texture);
+					for (int i = 0; i < width; ++i) {
+						for (int j = 0; j < height; ++j) {
+							ll p1 = texture.at<uchar>(i, j);
+							ll p2 = ref.at<uchar>(i, j);
+
+							diff += (p1 - p2) * (p1 - p2);
+						}
+					}
+					//printf("cur diff: %lld\n", diff);
+					if (mDif > diff) {
+						printf("Camera parameter is updated(%d %d %d %f // pref diff: %lld // cur diff: %lld)\n", xx, yy, zz, sc, mDif, diff);
+						mDif = diff;
+						mX = xx;
+						mY = yy;
+						mZ = zz;
+						mScale = sc;
+					}
+				}
+			}
+		}
+	}
 }
 void Str2Face(char msg[], FACE& face, int idx) {
 	int res = -1;
@@ -235,11 +268,18 @@ void GetDiff() {
 			imshow("Best image", texture);
 		}
 	}
-	imshow("Hi", referenceImage);
+	imshow("Reference", referenceImage);
 }
 void MyKeyboard(unsigned char key, int x, int y) {
 	//printf("Press %c \n", key);
 	static bool imshowFlag = 0;
+	if (!imshowFlag) {
+		imshowFlag = 1;
+		Texture2Mat(texture);
+		LoadReferenceImage(referenceImage);
+		imshow("Best image", texture);
+		imshow("Reference", referenceImage);
+	}
 	switch (key) {
 	case 'q': case 'Q': case '\033':
 		exit(0);
@@ -273,17 +313,17 @@ void MyKeyboard(unsigned char key, int x, int y) {
 		Step(scale, -scaleStep);
 		break;
 	case 'z':
-		if (!imshowFlag) {
-			imshowFlag = 1;
-			Texture2Mat(texture);
-			LoadReferenceImage(referenceImage);
-			imshow("Best image", texture);
-			imshow("Hi", referenceImage);
-		}
-		vector<thread> t;
+	//	vector<thread> t;
 		for (int i = 0; i < 2; ++i)
 			GetDiff();
 		break;
+	case 'x':
+		ll diff = 1e18;
+		int xx, yy, zz;
+		float sc;
+		CheckAllTransformation(texture, referenceImage, diff, xx, yy, zz, sc);
+		printf("Result\n");
+		printf("Diff: %lld, (%d %d %d) scale: %f\n", diff, xx, yy, zz, sc);
 	}
 	//printf("%d %d %d %f\n", cameraParameterX, cameraParameterY, cameraParameterZ, scale);
 	glutPostRedisplay();
@@ -329,7 +369,7 @@ int main(int argc, char** argv) {
 	glutInitDisplayMode(GLUT_SINGLE | GLUT_RGBA | GLUT_DEPTH);
 	glutInitWindowSize(width, height);
 	glutInitWindowPosition(0, 0);
-	glutCreateWindow("OpenGL");
+	glutCreateWindow("Current Image");
 	glClearColor(1.0, 1.0, 1.0, 1.0);
 	LoadObj();
 	//InitLight();

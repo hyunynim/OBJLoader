@@ -43,3 +43,5 @@ OpenGL+마우스+회전.cpp
 *.txt
 *.pdb
 *.ilk
+*.iobj
+*.ipdb
